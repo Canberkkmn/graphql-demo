@@ -5,16 +5,18 @@ const { ApolloServer, gql } = require('apollo-server');
 // Schema definition (typeDefs)
 const typeDefs = gql`
     type Query {
-        hello: String
         users: [User]
         posts: [Post]
+        categories: [Category]
     }
 
     type Mutation {
         createUser(input: CreateUserInput!): User
         createPost(input: CreatePostInput!): Post
+        createCategory(input: CreateCategoryInput!): Category
     }
 
+    # User Type
     type User {
         id: ID
         name: String
@@ -22,22 +24,39 @@ const typeDefs = gql`
         posts: [Post]
     }
 
+    # Post Type
     type Post {
         id: ID!
         title: String!
         content: String!
         author: User
+        category: Category
     }
 
+    # Category Type
+    type Category {
+        id: ID!
+        name: String!
+        posts: [Post]
+    }
+
+    # Create User Input
     input CreateUserInput {
         name: String!
         email: String!
     }
 
+    # Create Post Input
     input CreatePostInput {
         title: String!
         content: String!
         authorId: ID!
+        categoryId: ID!
+    }
+
+    # Create Category Input
+    input CreateCategoryInput {
+        name: String!
     }
 `;
 
@@ -54,27 +73,40 @@ const usersData = [
     }
 ];
 
-const postsData = [
+const categoriesData = [
     {
-        id: 1,
-        title: 'Post 1',
-        content: 'Content 1',
-        authorId: 1
+        id: 10,
+        name: 'Category 1'
     },
     {
-        id: 2,
+        id: 20,
+        name: 'Category 2'
+    }
+];
+
+const postsData = [
+    {
+        id: 101,
+        title: 'Post 1',
+        content: 'Content 1',
+        authorId: 1,
+        categoryId: 10
+    },
+    {
+        id: 102,
         title: 'Post 2',
         content: 'Content 2',
-        authorId: 2
+        authorId: 2,
+        categoryId: 20
     }
 ];
 
 // Resolvers
 const resolvers = {
     Query: {
-        hello: () => 'Hello world!',
         users: () => usersData,
-        posts: () => postsData
+        posts: () => postsData,
+        categories: () => categoriesData
     },
     Mutation: {
         createUser: (parent, args) => {
@@ -94,7 +126,7 @@ const resolvers = {
             const { title, content, authorId } = args.input;
 
             const newPost = {
-                id: String(postsData.length + 10),
+                id: String(postsData.length + 101),
                 title,
                 content,
                 authorId
@@ -103,7 +135,17 @@ const resolvers = {
             postsData.push(newPost);
 
             return newPost;
-        }
+        },
+        createCategory: (parent, { input }) => {
+            const newCategory = {
+                id: String(categoriesData.length + 10),
+                name: input.name,
+            };
+
+            categoriesData.push(newCategory);
+
+            return newCategory;
+        },
     },
     User: {
         posts: (parent) => {
@@ -113,6 +155,14 @@ const resolvers = {
     Post: {
         author: (parent) => {
             return usersData.find(user => user.id == parent.authorId);
+        },
+        category: (parent) => {
+            return categoriesData.find(category => category.id == parent.categoryId);
+        }
+    },
+    Category: {
+        posts: (parent) => {
+            return postsData.filter(post => post.categoryId === parent.id);
         }
     }
 };
