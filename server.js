@@ -9,10 +9,19 @@ const typeDefs = gql`
         users: [User]
     }
 
+    type Mutation {
+        createUser(input: CreateUserInput!): User
+    }
+
     type User {
         id: ID
         name: String
         email: String
+    }
+
+    input CreateUserInput {
+        name: String!
+        email: String!
     }
 `;
 
@@ -35,6 +44,21 @@ const resolvers = {
         hello: () => 'Hello world!',
         users: () => usersData,
     },
+    Mutation: {
+        createUser: (parent, args) => {
+            const { name, email } = args.input;
+
+            const newUser = {
+                id: String(usersData.length + 1),
+                name,
+                email
+            }
+
+            usersData.push(newUser);
+
+            return newUser;
+        }
+    }
 };
 
 // Apollo Server
