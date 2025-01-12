@@ -1,6 +1,6 @@
 // server.js
 
-const { ApolloServer, gql } = require('apollo-server');
+const { ApolloServer, gql, UserInputError } = require('apollo-server');
 
 // Schema definition (typeDefs)
 const typeDefs = gql`
@@ -111,6 +111,25 @@ const resolvers = {
     Mutation: {
         createUser: (parent, args) => {
             const { name, email } = args.input;
+
+            if (!name.trim()) {
+                throw new UserInputError('Name field is required', {
+                    invalidArgs: ['name']
+                });
+            }
+
+            if (!email.trim()) {
+                throw new UserInputError('Email field is required', {
+                    invalidArgs: ['email']
+                });
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                throw new UserInputError('Email is invalid', {
+                    invalidArgs: ['email']
+                });
+            }
 
             const newUser = {
                 id: String(usersData.length + 1),
