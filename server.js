@@ -1,6 +1,7 @@
 // server.js
 
-const { ApolloServer, gql, UserInputError } = require('apollo-server');
+const { ApolloServer, gql, UserInputError, ValidationError } = require('apollo-server');
+const Joi = require("joi");
 
 // Schema definition (typeDefs)
 const typeDefs = gql`
@@ -101,6 +102,11 @@ const postsData = [
     }
 ];
 
+const createUserSchema = Joi.object({
+    name: Joi.string().min(1).max(100).required(),
+    email: Joi.string().email().max(50).required()
+});
+
 // Resolvers
 const resolvers = {
     Query: {
@@ -109,9 +115,18 @@ const resolvers = {
         categories: () => categoriesData
     },
     Mutation: {
-        createUser: (parent, args) => {
-            const { name, email } = args.input;
+        createUser: (parent, { input }) => {
+            const { error, value } = createUserSchema.validate(input, { abortEarly: false });
 
+            if (error) {
+                throw new UserInputError('Validation Error', {
+                    ValidationError: error.details.map(e => e.message)
+                });
+            }
+
+            const { name, email } = value;
+
+            /*
             if (!name.trim()) {
                 throw new UserInputError('Name field is required', {
                     invalidArgs: ['name']
@@ -130,6 +145,7 @@ const resolvers = {
                     invalidArgs: ['email']
                 });
             }
+            */
 
             const newUser = {
                 id: String(usersData.length + 1),
