@@ -1,7 +1,11 @@
 // server.js
 
-const { ApolloServer, gql, UserInputError, ValidationError } = require('apollo-server');
 const Joi = require("joi");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const { ApolloServer, gql, UserInputError, ValidationError } = require('apollo-server');
+
+const SECRET_KEY = "supersecret123";
 
 // Schema definition (typeDefs)
 const typeDefs = gql`
@@ -12,6 +16,7 @@ const typeDefs = gql`
     }
 
     type Mutation {
+        login(input: LoginInput!): AuthPayload
         createUser(input: CreateUserInput!): User
         createPost(input: CreatePostInput!): Post
         createCategory(input: CreateCategoryInput!): Category
@@ -39,6 +44,18 @@ const typeDefs = gql`
         id: ID!
         name: String!
         posts: [Post]
+    }
+
+    # Auth Payload Type
+    type AuthPayload {
+        user: User
+        token: String
+    }
+
+    # Auth Payload Type
+    input LoginInput {
+        email: String!
+        password: String!
     }
 
     # Create User Input
@@ -115,6 +132,37 @@ const resolvers = {
         categories: () => categoriesData
     },
     Mutation: {
+        login: async (parent, { input }, context) => {
+            const { email, password } = input;
+
+            const user = await findUserByEmail(email);
+
+            if (!user) {
+                throw new UserInputError('User not found');
+            }
+
+            const passwordIsValid = await bcrypt.compare(password, user.passwordHash);
+
+            if (!passwordIsValid) {
+                throw new UserInputError('Invalid password');
+            }
+
+            const token = jwt.sign(
+                {
+                    userId: user.id,
+                    email: user.email
+                },
+                SECRET_KEY,
+                {
+                    expiresIn: "1h"
+                }
+            );
+
+            return {
+                user,
+                token
+            };
+        },
         createUser: (parent, { input }) => {
             const { error, value } = createUserSchema.validate(input, { abortEarly: false });
 
@@ -157,14 +205,16 @@ const resolvers = {
 
             return newUser;
         },
-        createPost: (parent, args) => {
-            const { title, content, authorId } = args.input;
+        createPost: async (parent, { input }, context) => {
+            if (!context.user) {
+                throw new ValidationError('User not authenticated');
+            }
 
             const newPost = {
                 id: String(postsData.length + 101),
-                title,
-                content,
-                authorId
+                title: input.title,
+                content: input.content,
+                authorId: context.user.id,
             }
 
             postsData.push(newPost);
@@ -203,7 +253,33 @@ const resolvers = {
 };
 
 // Apollo Server
-const server = new ApolloServer({ typeDefs, resolvers });
+const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    context: async ({ req }) => {
+        const authHeader = req.headers.authorization || '';
+        const token = authHeader.startsWith('Bearer ')
+            ? authHeader.substring(7, authHeader.length)
+            : null;
+
+        let user = null;
+
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, SECRET_KEY);
+
+                user = {
+                    id: decoded.userId,
+                    email: decoded.email
+                };
+            } catch (error) {
+                console.error("Invalid token", error);
+            }
+        }
+
+        return { user };
+    }
+});
 
 // Start the server
 server.listen().then(({ url }) => {
